@@ -40,16 +40,10 @@ export class ClubService {
     }
   }
 
-  shouldOpenNewVote(): boolean {
-    const clubStr = localStorage.getItem('club-cache');
-    if (!clubStr) return true;
-    try {
-      const club: Club = JSON.parse(clubStr);
-      if (!club.lastVoteTime) return true;
-      const diff = Date.now() - new Date(club.lastVoteTime).getTime();
-      return diff >= 7 * 24 * 60 * 60 * 1000;
-    } catch {
-      return true;
-    }
+  async shouldOpenNewVote(): Promise<boolean> {
+    const club = await this.get();
+    if (!club?.lastVoteTime) return true;
+    const diff = Date.now() - new Date(club.lastVoteTime).getTime();
+    return diff >= 7 * 24 * 60 * 60 * 1000;
   }
 }

@@ -164,7 +164,7 @@ export class SessionsComponent {
   ) {}
 
   shouldOpenVote(): boolean {
-    return this.clubSvc.shouldOpenNewVote() && this.store.sessions().length > 0;
+    return this.store.shouldOpenNewVote() && this.store.sessions().length > 0;
   }
 
   async createNewPeriod() {

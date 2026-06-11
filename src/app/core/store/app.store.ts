@@ -40,6 +40,12 @@ export class AppStore {
   readonly unreadCount = computed(() =>
     this.notificationsSig().filter(n => !n.isRead && n.memberId === this.currentMemberIdSig()).length
   );
+  readonly shouldOpenNewVote = computed(() => {
+    const club = this.clubSig();
+    if (!club?.lastVoteTime) return true;
+    const diff = Date.now() - new Date(club.lastVoteTime).getTime();
+    return diff >= 7 * 24 * 60 * 60 * 1000;
+  });
 
   constructor(
     private clubSvc: ClubService,

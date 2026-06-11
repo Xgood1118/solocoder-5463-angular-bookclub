@@ -230,9 +230,19 @@ export class MembersComponent implements OnInit {
   }
 
   async onDelete(m: Member) {
-    if (!confirm(`确定删除会员「${m.name}」？`)) return;
+    if (!confirm(`确定删除会员「${m.name}」？\n该会员的所有进度、投票、兑换、通知等数据将一并删除。`)) return;
+    const wasCurrent = m.id === this.store.currentMemberId();
     await this.memberSvc.remove(m.id);
     await this.store.loadMembers();
+    if (wasCurrent && this.store.members().length > 0) {
+      this.store.setCurrentMember(this.store.members()[0].id);
+    }
+    await this.store.loadSessions();
+    await this.store.loadProgresses();
+    await this.store.loadExchanges();
+    if (this.store.currentMemberId()) {
+      await this.store.loadNotifications();
+    }
     this.snackBar.open('已删除', 'OK', { duration: 1500 });
   }
 
