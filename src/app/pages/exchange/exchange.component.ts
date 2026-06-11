@@ -120,6 +120,7 @@ interface ExchangeOption {
 export class ExchangeComponent {
   displayedCols = ['time', 'type', 'desc', 'cost'];
   processingType = signal<ExchangeType | ''>('');
+  private isSubmitting = false;
   private usedNonces = new Set<string>();
 
   exchangeOptions: ExchangeOption[] = [
@@ -140,8 +141,13 @@ export class ExchangeComponent {
   ) {}
 
   async doExchange(type: ExchangeType) {
+    if (this.isSubmitting || this.processingType() !== '') {
+      return;
+    }
+    this.isSubmitting = true;
     const memberId = this.store.currentMemberId();
     if (!memberId) {
+      this.isSubmitting = false;
       this.snackBar.open('请先选择身份', 'OK', { duration: 1500 });
       return;
     }
@@ -163,6 +169,7 @@ export class ExchangeComponent {
       }
     } finally {
       this.processingType.set('');
+      this.isSubmitting = false;
     }
   }
 

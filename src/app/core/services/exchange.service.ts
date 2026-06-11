@@ -34,35 +34,66 @@ export class ExchangeService {
     if (!nonce || nonce.trim() === '') {
       return { error: '无效的请求标识' };
     }
-    const existing = await this.findByNonce(nonce);
-    if (existing) {
-      return { error: '该兑换已处理，请勿重复操作' };
-    }
     const config = EXCHANGE_CONFIG[type];
-    const member = await this.memberService.getById(memberId);
-    if (!member) return { error: '会员不存在' };
-    if (member.points < config.points) {
-      return { error: `积分不足，需要 ${config.points} 分，当前 ${member.points} 分` };
-    }
-    const updated = await this.memberService.deductPoints(memberId, config.points);
-    if (!updated) return { error: '积分扣除失败' };
+    const dbInstance = await db();
+    const tx = dbInstance.transaction(['exchanges', 'members'], 'readwrite');
+    const exchangeStore = tx.objectStore('exchanges');
+    const memberStore = tx.objectStore('members');
 
-    const record: ExchangeRecord = {
-      id: this.genId(),
-      memberId,
-      type,
-      pointsCost: config.points,
-      description: config.desc,
-      nonce,
-      createdAt: new Date().toISOString(),
-    };
     try {
-      await (await db()).add('exchanges', record);
-    } catch {
-      await this.memberService.update(memberId, { points: member.points });
-      return { error: '兑换失败，已回滚积分' };
+      const existingRecord = await exchangeStore.index('by-nonce').get(nonce);
+      if (existingRecord) {
+        await tx.done;
+        return { error: '该兑换已处理，请勿重复操作' };
+      }
+
+      const member = await memberStore.get(memberId);
+      if (!member) {
+        await tx.done;
+        return { error: '会员不存在' };
+      }
+      if (member.points < config.points) {
+        await tx.done;
+        return { error: `积分不足，需要 ${config.points} 分，当前 ${member.points} 分` };
+      }
+
+      const record: ExchangeRecord = {
+        id: this.genId(),
+        memberId,
+        type,
+        pointsCost: config.points,
+        description: config.desc,
+        nonce,
+        createdAt: new Date().toISOString(),
+      };
+
+      await exchangeStore.add(record);
+
+      member.points -= config.points;
+      member.updatedAt = new Date().toISOString();
+      await memberStore.put(member);
+
+      await tx.done;
+      return record;
+    } catch (err) {
+      try {
+        await tx.abort();
+      } catch {}
+      const error = err as Error & { name?: string; code?: number };
+      const isDuplicate = 
+        error.name === 'ConstraintError' ||
+        error.name === 'DataError' ||
+        (error.message && (
+          error.message.includes('unique') ||
+          error.message.includes('ConstraintError') ||
+          error.message.includes('already exists') ||
+          error.message.includes('by-nonce')
+        ));
+      if (isDuplicate) {
+        return { error: '该兑换已处理，请勿重复操作' };
+      }
+      return { error: '兑换失败，请稍后重试' };
     }
-    return record;
   }
 
   generateNonce(): string {
